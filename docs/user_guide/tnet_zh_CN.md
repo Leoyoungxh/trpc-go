@@ -9,7 +9,7 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用�
 
 ## 原理
 
-在本章中，我们通过两张图展示 Golang 中一个连接一个协程模型和基于事件驱动模型的基本原理。
+我们通过两张图展示 Golang 中一个连接一个协程模型和基于事件驱动模型的基本原理。
 
 ### 一个连接一个协程
 
@@ -58,7 +58,7 @@ server:
 
 服务端启动服务后通过 log 确认插件启用成功：
 
-INFO tnet/server_transport.go service:trpc.app.server.service is using tnet transport, current number of pollers: 1
+`INFO tnet/server_transport.go service:trpc.app.server.service is using tnet transport, current number of pollers: 1`
 
 **客户端**：
 
@@ -78,7 +78,7 @@ client:
 
 客户端启动服务后通过 log 确认插件启用成功（Trace 级别）：
 
-Debug tnet/client_transport.go roundtrip to:127.0.0.1:8000 is using tnet transport, current number of pollers: 1
+`Debug tnet/client_transport.go roundtrip to:127.0.0.1:8000 is using tnet transport, current number of pollers: 1`
 
 #### 方法二：代码配置
 
@@ -116,6 +116,7 @@ func main() {
 涉及性能调优的选项主要有以下两个：
 
 1. `tnet.SetNumPollers` 用来设置 pollers 的个数，其默认值为 1，根据业务场景的不同，这个数量需要相应地调大（可在业务自身压测时依次尝试 2 的幂次直至 CPU 核数，比如 2, 4, 8, 16...），这种设置可以通过自定义 flag 或者从环境变量中读取，以避免反复编译二进制
+
 2. `server.WithServerAsync` 用来设置同步异步模式，其默认值为 true（异步），根据业务场景的不同，用户在压测自身业务时可以尝试通过 `server.WithServerAsync(false)` 来设置为同步以进行对比
 
 以上两个选项的设置示例如下：
@@ -123,7 +124,7 @@ func main() {
 设置 poller 个数：
 
 ``` go
-import "git.woa.com/trpc-go/tnet"
+import "trpc.group/trpc-go/tnet"
 
 var num uint
 
@@ -138,8 +139,8 @@ func main() {
 
 ``` go
 import (
-    "git.code.oa.com/trpc-go/trpc-go/server"
-    "git.code.oa.com/trpc-go/trpc-go"
+    "trpc.group/trpc-go/trpc-go/server"
+    "trpc.group/trpc-go/trpc-go"
 )
 
 func main() {
@@ -156,7 +157,6 @@ func main() {
 server:
   service:
     - name: trpc.app.server.service 
-      addr: xxx
       network: tcp  
       protocol: trpc  
       transport: tnet # 使用 tnet transport 网络库
@@ -177,9 +177,9 @@ server:
 
 **其他场景：**
 
-- 作为服务端使用 tnet，客户端发送请求使用连接池模式，性能表现和原 gonet 基本持平
+- 作为服务端使用 tnet，客户端发送请求使用连接池模式，性能表现和 gonet 基本持平
 
-- 作为客户端使用 tnet，开启连接池模式，性能表现和原 gonet 基本持平
+- 作为客户端使用 tnet，开启连接池模式，性能表现和 gonet 基本持平
 
 ## 常见问题
 
@@ -231,7 +231,7 @@ client:
         max_vir_conns_per_conn: 25 # 每个连接上的最大并发虚拟连接数量
 ```
 
-**Q：开启 tnet 后提示 “switch to gonet default transport, tnet server transport doesn't support network type [udp]”？**
+**Q：开启 tnet 后提示 `switch to gonet default transport, tnet server transport doesn't support network type [udp]`？**
 
 A: 这个报错的意思是，tnet transport 暂时不支持 UDP，自动降级使用 golang net 库，不影响服务正常启动。
 
