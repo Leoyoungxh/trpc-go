@@ -87,7 +87,7 @@ Debug tnet/client_transport.go roundtrip to:127.0.0.1:8000 is using tnet transp
 这种方式会对 server 的所有 service 都进行配置，如果 server 中存在 http 协议的 service，会出现报错。
 
 ``` go
-import "git.code.oa.com/trpc-go/trpc-go/transport/tnet"
+import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
   // 创建一个 serverTransport
@@ -102,10 +102,10 @@ func main() {
 **客户端**：
 
 ``` go
-import "git.code.oa.com/trpc-go/trpc-go/transport/tnet"
+import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	proxy := pb.NewGreeterServiceClientProxy()
+	proxy := pb.NewGreeterClientProxy()
 	trans := tnet.NewClientTransport()
 	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
@@ -168,13 +168,18 @@ server:
 我们使用 tnet 进行了压力测试，从测试结果来看，tnet transport 相比 gonet transport 在特定场景下可以提供更好的性能，但是不是所有场景都有优势。在此总结 tnet transport 的优势场景。
 
 **tnet 优势场景：**
-作为服务端使用 tnet，客户端发送请求使用多路复用的模式，可以充分发挥 tnet 批量收发包的能力，可以提高 QPS，降低 CPU 占用
-作为服务端使用 tnet，存在大量的不活跃连接的场景（连接数10万以上），可以通过减少协程数等逻辑降低内存占用
-作为客户端使用 tnet，开启多路复用模式，可以充分发挥 tnet 批量收发包的能力，可以提高 QPS。
+
+- 作为服务端使用 tnet，客户端发送请求使用多路复用的模式，可以充分发挥 tnet 批量收发包的能力，可以提高 QPS，降低 CPU 占用
+
+- 作为服务端使用 tnet，存在大量的不活跃连接的场景（连接数10万以上），可以通过减少协程数等逻辑降低内存占用
+
+- 作为客户端使用 tnet，开启多路复用模式，可以充分发挥 tnet 批量收发包的能力，可以提高 QPS。
 
 **其他场景：**
-作为服务端使用 tnet，客户端发送请求使用连接池模式，性能表现和原 gonet 基本持平
-作为客户端使用 tnet，开启连接池模式，性能表现和原 gonet 基本持平
+
+- 作为服务端使用 tnet，客户端发送请求使用连接池模式，性能表现和原 gonet 基本持平
+
+- 作为客户端使用 tnet，开启连接池模式，性能表现和原 gonet 基本持平
 
 ## 常见问题
 
@@ -184,11 +189,14 @@ A：tnet 不支持 HTTP，在使用 HTTP 协议的服务端/客户端开启 tnet
 
 **Q：开启 tnet 之后性能为什么没有提升？**
 
-A：tnet 并不是万金油，在特定的场景下可以充分利用 Writev 批量发包，减少系统调用，是可以提高服务的性能的。
+A：tnet 并不是万金油，在特定的场景下可以充分利用 Writev 批量发包，减少系统调用，是可以提高服务的性能的。如果在 tnet 的优势场景下服务性能仍不理想，可以按照以下步骤针对自己的服务进行优化。
 
-1. 可以通过开启客户端的 tnet 多路复用（multiplexed）功能，尽可能利用 Writev 批量发包；
-2. 为整个服务链路都开启 tnet，上游使用多路复用的话，当前服务端也可以充分利用 Writev 批量发包；
-3. 如果使用了多路复用功能，可以开启多路复用监控，查看每个连接上有多少虚拟连接，如果并发量较大，导致单连接上的虚拟连接数过多，也会影响性能，添加配置开启多路复用监控上报。
+开启客户端的 tnet 多路复用（multiplexed）功能，尽可能利用 Writev 批量发包；
+
+为整个服务链路开启 tnet，上游使用多路复用的话，当前服务端也可以充分利用 Writev 批量发包；
+
+如果使用了多路复用功能，可以开启多路复用监控，查看每个连接上有多少虚拟连接，如果并发量较大，导致单连接上的虚拟连接数过多，也会影响性能，添加配置开启多路复用监控上报。
+
 
 ```yaml
 client:
@@ -202,15 +210,15 @@ client:
 
 每隔3s，就会打印多路复用状态的日志。在日志中可以看到当前的连接数是1个，虚拟连接总数是98个。
 
-DEBUG tnet multiplex status: network: tcp, address: 127.0.0.1:7002, connections number: 1, concurrent virtual connection number: 98
+`DEBUG tnet multiplex status: network: tcp, address: 127.0.0.1:7002, connections number: 1, concurrent virtual connection number: 98`
 
 同时也会上报自定义监控，监控项格式是：
 
-并发连接数：trpc.MuxConcurrentConnections.$network.$address
+并发连接数：`trpc.MuxConcurrentConnections.$network.$address`
 
-虚拟连接总数：trpc.MuxConcurrentVirConns.$network.$address
+虚拟连接总数：`trpc.MuxConcurrentVirConns.$network.$address`
 
-假设现在修改每个连接上的最大并发虚拟连接数量为25，可以这样写：
+假设希望设置每个连接上的最大并发虚拟连接数量为25，可以添加如下配置：
 
 ```yaml
 client:
