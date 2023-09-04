@@ -183,13 +183,13 @@ server:
 
 ## 常见问题
 
-**Q：tnet 支持 HTTP 吗？**
+#### Q：tnet 支持 HTTP 吗？
 
-A：tnet 不支持 HTTP，在使用 HTTP 协议的服务端/客户端开启 tnet 的话，会自动降级使用 golang net 库。
+tnet 不支持 HTTP，在使用 HTTP 协议的服务端/客户端开启 tnet 的话，会自动降级使用 golang net 库。
 
-**Q：开启 tnet 之后性能为什么没有提升？**
+#### Q：开启 tnet 之后性能为什么没有提升？
 
-A：tnet 并不是万金油，在特定的场景下可以充分利用 Writev 批量发包，减少系统调用，是可以提高服务的性能的。如果在 tnet 的优势场景下服务性能仍不理想，可以按照以下步骤针对自己的服务进行优化。
+tnet 并不是万金油，在特定的场景下可以充分利用 Writev 批量发包，减少系统调用，是可以提高服务的性能的。如果在 tnet 的优势场景下服务性能仍不理想，可以按照以下步骤针对自己的服务进行优化。
 
 开启客户端的 tnet 多路复用（multiplexed）功能，尽可能利用 Writev 批量发包；
 
@@ -231,7 +231,7 @@ client:
         max_vir_conns_per_conn: 25 # 每个连接上的最大并发虚拟连接数量
 ```
 
-**Q：开启 tnet 后提示 `switch to gonet default transport, tnet server transport doesn't support network type [udp]`？**
+#### Q：开启 tnet 后提示 `switch to gonet default transport, tnet server transport doesn't support network type [udp]`？
 
-A: 这个报错的意思是，tnet transport 暂时不支持 UDP，自动降级使用 golang net 库，不影响服务正常启动。
+这个报错的意思是，tnet transport 暂时不支持 UDP，自动降级使用 golang net 库，不影响服务正常启动。
 
