@@ -13,7 +13,7 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用�
 
 ### 一个连接一个协程
 
-![one_connection_one_coroutine](/.resources/user_guide/tnet/one_connection_one_coroutine_zh_CN.png)
+![one_connection_one_coroutine](/.resources/user_guide/tnet/one_connection_one_goroutine_zh_CN.png)
 
 一个连接一个协程的模式下，服务端 Accept 一个新的连接，就为该连接起一个协程，然后在这个协程中从连接读数据、处理数据、向连接发数据。
 
