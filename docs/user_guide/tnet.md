@@ -1,98 +1,50 @@
-tRPC-Go access to high-performance network library
+# Using high-performance networking framework tnet with tRPC-Go
 
+English | [中文](./tnet_zh_CN.md)
 
+## Introduction
 
-# Introduction
+The Golang Net library provides a simple non-blocking interface, with a network model that employs `Goroutine-per-Connection`. In most scenarios, this model is straightforward and user-friendly. However, when dealing with thousands or even millions of connections, allocating a goroutine for each connection consumes a significant amount of memory, and managing a large number of goroutines becomes challenging.
 
-The Net library of Golang provides a simple non-blocking call interface, and its network model adopts a **Goroutine-per-Connection** approach. In most scenarios, this model is simple and easy to use. However, when the number of connections reaches thousands or even millions, allocating a Goroutine for each connection will consume a huge amount of memory, and scheduling a large number of Goroutines will become very difficult. To support millions of connections, it is necessary to break the Goroutine-per-Connection model. [The high-performance network library TNET](https://git.woa.com/trpc-go/tnet) is based on the **event-driven (Reactor) network model**, which can provide the ability to handle millions of connections. The tRPC-Go framework can now use the TNET network library through plugins to support millions of connections. In addition to supporting millions of connections, TNET has better performance than Golang's native Net library, and its high-performance network capabilities can be used through plugins.
+To support the capability of handling millions of connections, it is essential to break away from the `Goroutine-per-Connection` model. The high-performance networking library [tnet](https://github.com/trpc-group/tnet) is built on a `Reactor` network model, enabling the handling of millions of connections. The tRPC-Go framework integrates the tnet network library, thereby providing support for handling millions of connections. In addition to this, tnet also offers features such as batch packet transmission and reception, zero-copy buffering, and fine-grained memory management optimizations, making it outperform the native Golang Net library in terms of performance.
 
-The main advantages of TNET are:
+## Principle
 
-- Supports more connections (up to millions)
-- Higher performance (higher QPS, lower latency)
-- Less memory usage (only about 10% of the memory used by go/net)
-- Easy to use (consistent with the interface provided by Golang Net library)
+We use two diagrams to illustrate the basic principles of the `Goroutine-per-Connection` model and the `Reactor` model in Golang. 
 
-**For more implementation details about TNET, please refer to the [article](https://km.woa.com/articles/show/542878).**
+### Goroutine-per-Connection
 
-# Principle
+![goroutine_per_connection](/.resources/user_guide/tnet/goroutine_per_connection.png)
 
-In this chapter, we use two diagrams to illustrate the basic principles of the Goroutine-per-Connection model and the event-driven model in Golang. 
+In the Goroutine-per-Connection model, when the server accepts a new connection, it creates a goroutine for that connection, and then reads data from the connection, processes the data, and sends data back to the connection in that goroutine.
 
-## Goroutine-per-Connection
+The scenario of millions of connections usually refers to long connection scenarios. Although the total number of connections is huge, only a small number of connections are active at any given time. Active connections refer to connections that have data to be read or written at a certain moment. Conversely, when there is no data to be read or written on a connection, it is called an idle connection. The idle connection goroutine will block on the Read call. Although the goroutine does not occupy scheduling resources, it still occupies memory resources, which ultimately leads to huge memory consumption. In this model, allocating a goroutine for each connection in a scenario of millions of connections is expensive.
 
-![one_connection_one_coroutine](/.resources/user_guide/tnet/one_connection_one_coroutine.png)
+For example, as shown in the above diagram, the server accepts 5 connections and creates 5 goroutines. At this moment, the first 3 connections are active connections, and data can be read from them smoothly. After processing the data, the server sends data back to the connections to complete a data exchange, and then starts the second round of data reading. The last 2 connections are idle connections, and when reading data from them, the process will be blocked. Therefore, the subsequent process is not triggered. As we can see, although only 3 connections can successfully read data at this moment, 5 goroutines are allocated, resulting in a 40% waste of resources. The larger the proportion of idle connections, the more resources will be wasted.
 
-In the Goroutine-per-Connection model, when the server accepts a new connection, it creates a Goroutine for that connection, and then reads data from the connection, processes the data, and sends data back to the connection in that Goroutine.
+### Reactor 
 
-The scenario of millions of connections usually refers to long connection scenarios. Although the total number of connections is huge, only a small number of connections are active at any given time. Active connections refer to connections that have data to be read or written at a certain moment. Conversely, when there is no data to be read or written on a connection, it is called an idle connection. The idle connection Goroutine will block on the Read call. Although the Goroutine does not occupy scheduling resources, it still occupies memory resources, which ultimately leads to huge memory consumption. In this model, allocating a Goroutine for each connection in a scenario of millions of connections is expensive.
+![reactor](/.resources/user_guide/tnet/reactor.png)
 
-For example, as shown in the above diagram, the server accepts 5 connections and creates 5 Goroutines. At this moment, the first 3 connections are active connections, and data can be read from them smoothly. After processing the data, the server sends data back to the connections to complete a data exchange, and then starts the second round of data reading. The last 2 connections are idle connections, and when reading data from them, the process will be blocked. Therefore, the subsequent process is not triggered. As we can see, although only 3 connections can successfully read data at this moment, 5 Goroutines are allocated, resulting in a 40% waste of resources. The larger the proportion of idle connections, the more resources will be wasted.
+The Reactor model refers to using multiplexing (epoll/kqueue) to listen for events such as read and write on file descriptors (FDs), and then performing corresponding operations when events are triggered.
 
-## Event-driven
+In the diagram, the poller structure is responsible for listening to events on FDs. Each poller occupies a goroutine, and the number of pollers is usually equal to the number of CPUs. We use a separate poller to listen for read events on the listener port to accept new connections, and then listen for read events on each connection. When a connection becomes readable, a goroutine is allocated to read data from the connection, process the data, and send data back to the connection. At this point, there will be no idle connections occupying goroutines. In a scenario of millions of connections, only active connections are allocated goroutines, which can make full use of memory resources.
 
-![event_driven](/.resources/user_guide/tnet/event_driven.png)
+For example, as shown in the above diagram, the server has 5 pollers, one of which is responsible for listening to the listener events and accepting new connections, and the other 4 pollers are responsible for listening to read events on connections. When 2 connections become readable at a certain moment, a goroutine is allocated for each connection to read data, process data, and send data back to the connection. Because it is already known that these two connections are readable, the Read process will not block, and the subsequent process can be executed smoothly. When writing data back to the connection, the goroutine registers a write event with the poller, and then exits. The poller listens for write events on the connection and sends data when the connection is writable, completing a round of data exchange.
 
+## Quick start
 
+### Enable tnet
 
-The event-driven model refers to using multiplexing (epoll/kqueue) to listen for events such as read and write on file descriptors (FDs), and then performing corresponding operations when events are triggered.
+There are two ways to enable tnet in tRPC-Go. Choose one of them for configuration. It is recommended to use the first method.
 
-In the diagram, the Poller structure is responsible for listening to events on FDs. Each Poller occupies a Goroutine, and the number of Pollers is usually equal to the number of CPUs. We use a separate Poller to listen for read events on the listener port to accept new connections, and then listen for read events on each connection. When a connection becomes readable, a Goroutine is allocated to read data from the connection, process the data, and send data back to the connection. At this point, there will be no idle connections occupying Goroutines. In a scenario of millions of connections, only active connections are allocated Goroutines, which can make full use of memory resources.
+(1) Add tnet in the tRPC-Go framework configuration file.
 
-For example, as shown in the above diagram, the server has 5 Pollers, one of which is responsible for listening to the listener and accepting new connections, and the other 4 Pollers are responsible for listening to read events on connections. When 2 connections become readable at a certain moment, a Goroutine is allocated for each connection to read data, process data, and send data back to the connection. Because it is already known that these two connections are readable, the Read process will not block, and the subsequent process can be executed smoothly. When writing data back to the connection, the Goroutine registers a write event with the Poller, and then exits. The Poller listens for write events on the connection and sends data when the connection is writable, completing a round of data exchange.
+(2) Use the WithTransport() method in the code to enable tnet.
 
-# Performance improvement effect
+#### Method 1: Configuration file (recommended)
 
-Thanks to optimizations such as batch packet sending and receiving and fine-grained memory management in TNET, TNET not only has performance advantages in scenarios with millions of connections, but also has significant performance improvements in scenarios with a small number of connections
-
-To demonstrate the performance improvement of tRPC-Go using TNET, we conducted a comparison test on a 48-core 2.3GHz physical machine, using TNET and Go/net as the network transport layer for tRPC-Go, with the following settings:
-
-- Client: 25 cores, Server: 8 cores
-- Number of connections: 100, 500, 1000
-- Server configuration: synchronous mode, asynchronous mode (configured through Server.WithServerAsync in tRPC-Go)
-- Server program: echo service, received packet length: 122 bytes
-- Load testing tool: eab
-- Fixed P99 <= 10ms to see the maximum QPS that can be achieved
-
-The test results showed that TNET outperformed Go/net in scenarios with 100, 500, and 1000 connections.
-
-![tnet](/.resources/user_guide/tnet/tnet.png)
-
-# Quick Startup
-
-![transport_module](/.resources/user_guide/tnet/transport_module.png)
-
-The transport module of tRPC-Go adopts a [pluggable](https://git.woa.com/trpc-go/trpc-wiki/blob/main/developer_guide/develop_plugins/overview.md) design. We customized its transport module and used the tnet network library as the underlying network transport layer for tRPC-Go. The tRPC-Go framework (version 0.11.0 and above) has integrated the tnet network library.
-
-(1) The websocket protocol also has its tnet version: https://git.woa.com/trpc-go/tnet/tree/master/extensions/websocket
-
-And the tnet-transport version: https://git.woa.com/trpc-go/trpc-tnet-transport/tree/master/websocket
-
-If users of the tRPC-Go framework need to use the websocket protocol, they can directly use the tnet-transport version.
-
-(2) The HTTP protocol currently has an invasive modified version for fasthttp (https://git.woa.com/wineguo/fasthttp/tree/tnet)
-
-Example usage can be found here: https://git.woa.com/wineguo/fasthttp/blob/tnet/tnetexamples/echo/tnet/main.go
-
-(Please use with caution)
-
-(3) For support of other business protocols (non-tRPC protocols):
-
-As long as the codec implementation is similar to the ones provided in https://git.woa.com/trpc-go/trpc-codec, generally adding protocol: your_protocol and transport: tnet to the configuration can use the tnet capability (specific protocols can be handled on a case-by-case basis by contacting wineguo or leoxhyang).
-
-## Usage
-
-There are two ways to configure the tnet transport module. Users can choose one of them for configuration. It is recommended to use the first method.
-
-(1) Add the plugin in the tRPC-Go framework configuration file.
-
-(2) Call the WithTransport() method in the code to add the plugin.
-
-### Method 1: Configuration file configuration (recommended)
-
-**Note: tRPC-Go main framework version v0.11.0 and above is required**
-
-Add tnet to the transport field in the tRPC-Go configuration file. Since the plugin currently only supports TCP, please do not configure the tnet plugin for UDP services.
+Add tnet to the transport field in the tRPC-Go configuration file. Since the plugin currently only supports TCP, please do not configure the tnet plugin for UDP services. The server and client can each independently activate tnet, and they do not interfere with each other.
 
 **Server**:
 
@@ -105,9 +57,9 @@ server:
       transport: tnet   # Applies only to the current service 
 ```
 
-After starting the server, confirm that the plugin is successfully enabled through the log:
+After the server is started, the log indicates the successful activation of tnet:
 
-INFO tnet/server_transport.go service:trpc.app.server.service is using tnet transport, current number of pollers: 1
+`INFO tnet/server_transport.go service:trpc.app.server.service is using tnet transport, current number of pollers: 1`
 
 **Client**:
 
@@ -118,27 +70,30 @@ client:
     - name: trpc.app.server.service             
       network: tcp
       transport: tnet   # Applies only to the current service 
+      conn_type: multiplexed # Using multiplexed connection mode
+      multiplexed:
+        enable_metrics: true # Enable metrics for multiplexed pool
 ```
 
-After starting the client, confirm that the plugin is successfully enabled through the log (Trace level):
+It's recommended to use multiplexed connection mode with tnet to enhance performance, because it can fully leverage tnet's batch packet transmission capabilities.
 
-Debug tnet/client_transport.go roundtrip to:127.0.0.1:8000 is using tnet transport, current number of pollers: 1
+After the client is started, the log indicates the successful activation of tnet (Trace level):
 
-### Method 2: Code configuration
+`Debug tnet/client_transport.go roundtrip to:127.0.0.1:8000 is using tnet transport, current number of pollers: 1`
 
-**Note: tRPC-Go main framework version v0.11.0 and above is required**
+#### Method 2: Code configuration
 
 **Server**:
 
-This method will configure all services in the server. If there is an HTTP protocol service in the server, an error will occur.
+Notics: This method will enable tnet for all services of the server. 
 
 ``` go
-import "git.code.oa.com/trpc-go/trpc-go/transport/tnet"
+import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-  // Create a serverTransport
+  // Create a ServerTransport
   trans := tnet.NewServerTransport()
-  // Create a trpc service
+  // Create a trpc server
   s := trpc.NewServer(server.WithTransport(trans))
   pb.RegisterGreeterService(s, &greeterServiceImpl{})
   s.Serve()
@@ -148,94 +103,83 @@ func main() {
 **Client**:
 
 ``` go
-import "git.code.oa.com/trpc-go/trpc-go/transport/tnet"
+import "trpc.group/trpc-go/trpc-go/transport/tnet"
 
 func main() {
-	proxy := pb.NewGreeterServiceClientProxy()
+	proxy := pb.NewGreeterClientProxy()
 	trans := tnet.NewClientTransport()
 	rsp, err := proxy.SayHello(trpc.BackgroundContext(), &pb.HelloRequest{Msg: "Hello"}, client.WithTransport(trans))
 }
 ```
 
-## Supported options
+## Use Cases
 
-There are two main options related to performance tuning:
+According to the benchmark result, tnet transport outperforms gonet transport in specific scenarios. However, not all scenarios exhibit these advantages. Here, we summarize the scenarios in which tnet transport excels.
 
-1. `tnet.SetNumPollers` is used to set the number of pollers. Its default value is 1. Depending on the business scenario, this number needs to be increased accordingly (you can try 2 to the power of CPU cores, such as 2, 4, 8, 16... during business load testing). This setting can be customized through flags or read from environment variables to avoid repeatedly compiling binaries.
-2. `server.WithServerAsync` is used to set the synchronous and asynchronous mode. Its default value is true (asynchronous). Depending on the business scenario, users can try setting it to synchronous mode by using `server.WithServerAsync(false)` during load testing to make comparisons.
+**Advantageous Scenarios for tnet：**
 
-The following are examples of setting the above two options:
+- When using tnet in server, if the client sends requests using multiplexed connection mode, it can fully utilize tnet's batch packet transmission capabilities, leading to increased QPS and reduced CPU usage.
 
-Set the number of poller:
+- When using tnet in server, if there are a large number of idle connections, it can reduce memory usage by lowering the number of goroutines.
 
-``` go
-import "git.woa.com/trpc-go/tnet"
+- When using tnet in client, if the multiplexed mode is enabled, it can fully leverage tnet's batch packet transmission capabilities, resulting in improved QPS.
 
-var num uint
+**Other Scenarios:**
 
-func main() {
-    flag.UintVar(&num, "n", 4, "set the number of tnet poller")
-    tnet.SetNumPollers(num)
-    // ..
-}
+- When using tnet in server, if the client sends requests not using multiplexed connection mode, performance is similar to gonet.
+
+- When using tnet in client, if the multiplexed mode is disable, performance is similar to gonet.
+
+## FAQ
+
+#### Q：Does tnet support HTTP？
+
+Tnet doesn't support HTTP. When tnet is used in HTTP server/client, it automatically falls  back to using the golang net package.
+
+#### Q：Why doesn't performance improve after enabling tnet?
+
+Tnet is not a universal solution, and it can significantly boost service performance by fully utilizing Writev for batch packet transmission and reducing system calls in specific scenarios. If you find that the service performance is still not satisfactory in tnet's advantageous scenarios, you can consider optimizing your service using the following steps:
+
+Enable the client-side multiplexed connection mode with tnet and make full use of Writev for batch packet transmission whenever possible;
+
+Enable tnet and multiplexed connection mode for the entire service chain. If the upstream server utilizes multiplexed, the current server can also take advantage of Writev for batch packet transmission;
+
+If you have enabled the multiplexed connection mode, you can enable metrics to inspect the number of virtual connections on each connection. If there is substantial concurrency, causing an excessive number of virtual connections on a single connection, it can also impact performance. Configure and enable multiplexed metrics accordingly.
+
+
+```yaml
+client:
+  service:
+    - name: trpc.test.helloworld.Greeter1
+      transport: tnet
+      conn_type: multiplexed
+      multiplexed:
+        enable_metrics: true # Enable metrics for multiplexed pool
 ```
 
-Set synchronous mode:
+Every 3 seconds, logs containing the multiplexed status are printed. For example, you can see that the current number of active connections is 1, and the total number of virtual connections is 98.
 
-``` go
-import (
-    "git.code.oa.com/trpc-go/trpc-go/server"
-    "git.code.oa.com/trpc-go/trpc-go"
-)
+`DEBUG tnet multiplex status: network: tcp, address: 127.0.0.1:7002, connections number: 1, concurrent virtual connection number: 98`
 
-func main() {
-    // This is the configuration for all services globally
-    // The following configuration is recommended, which can configure a single server service separately
-    s := trpc.NewServer(server.WithServerAsync(false))
-    // ..
-}
+It also reports status to custom metrics, and the format of the metrics items is as follows:
+
+Active connections：`trpc.MuxConcurrentConnections.$network.$address`
+
+Virtual connections：`trpc.MuxConcurrentVirConns.$network.$address`
+
+Assuming you want to set the maximum concurrent virtual connections per connection to 25, you can add the following configuration:
+
+```yaml
+client:
+  service:
+    - name: trpc.test.helloworld.Greeter1
+      transport: tnet
+      conn_type: multiplexed
+      multiplexed:
+        enable_metrics: true 
+        max_vir_conns_per_conn: 25 # maximum number of concurrent virtual connections per connection
 ```
 
-Configure synchronous mode for a specific service in the configuration file:
+#### Q：Why does it log `switch to gonet default transport, tnet server transport doesn't support network type [udp]` after enabling tnet？
 
-``` yaml
-server:  # Server configuration
-  app: yourAppName  # Application name of the business
-  server: helloworld_svr  # Process service name
-  service:  # Services provided by the business, there can be multiple
-    - name: helloworld.helloworld_svr  # Routing name of the service
-      ip: 127.0.0.1  # Service listening IP address. Placeholders ${ip} can be used. Either ip or nic can be used, and ip has priority.
-      # nic: eth0
-      port: 8000  # Service listening port. Placeholders ${port} can be used.
-      network: tcp  # Network listening type: tcp or udp
-      protocol: trpc  # Application layer protocol: trpc or http
-      transport: tnet # Use the tnet transport network library
-      server_async: false # Set to synchronous mode
-      timeout: 1000  # Maximum processing time for a request, in milliseconds
-```
-
-In addition, the plugin supports the KeepAlive option, and KeepAlive is enabled by default in the tnet network library.
-
-``` go
-import "git.code.oa.com/trpc-go/trpc-go/transport/tnet"
-
-func main() {
-    t := tnet.NewServerTransport(tnet.WithKeepAlivePeriod(20 * time.Second))
-    //...
-}
-```
-
-# Business integration cases and effects
-
-[Records of businesses that have integrated tnet](https://doc.weixin.qq.com/doc/w3_AGkAxgZOAFMiax1Z20yRUSK67eOsW?scode=AJEAIQdfAAoT0g9EAMAGkAxgZOAFM)
-
-# To-do list
-
-1. UDP service
-
-# Related sharing
-
-Technical salon sharing by IEG Value-added Services Department in September 2022:
-
-[Design, implementation, and performance optimization of tnet high-performance network library](todo)
-
+The log indicates tnet transport does't support UDP. It will automatically falls back to using golang net package.
