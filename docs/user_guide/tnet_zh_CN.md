@@ -23,7 +23,7 @@ Golang 的 Net 库提供了简单的非阻塞调用接口，网络模型采用`�
 
 ### 事件驱动
 
-![event_driven](/.resources/user_guide/tnet/reactor.png)
+![reactor](/.resources/user_guide/tnet/reactor.png)
 
 事件驱动模式是指利用多路复用（epoll / kqueue）监听 FD 的可读、可写等事件，当有事件触发的时候做相应的处理。
 
