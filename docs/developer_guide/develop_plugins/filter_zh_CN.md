@@ -104,7 +104,7 @@ func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, stre
 	
 	// 上报耗时到具体监控平台
 
-	return &wrappedStream{s}, err // wrappedStream 封装了 client.ClientStream，用于后续拦截 SendMsg、RecvMsg 等接口。注意这里必须返回 streamer 的 err
+	return &wrappedStream{s}, err // wrappedStream 封装了 client.ClientStream，用于后续拦截 SendMsg、RecvMsg 等方法。注意这里必须返回 streamer 的 err
 }
 ```
 **第二步**：封装 `client.ClientStream`，重写对应方法方法
@@ -115,7 +115,7 @@ func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, stre
 
 例如我只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`client.ClientStream`其他的方法都不需要重新实现。这里是为了演示，所以实现了`client.ClientStream`的所有方法。
 ```golang
-// wrappedStream 封装原始流，需要拦截哪些接口，就重写哪些接口
+// wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
 type wrappedStream struct {
 	client.ClientStream // 必须内嵌 client.ClientStream
 }
@@ -192,8 +192,8 @@ proxy := pb.NewGreeterClientProxy(client.WithStreamFilters(StreamClientFilter))
 // 创建流
 cstream，err := proxy.ClientStreamSayHello(ctx)
 
-// 流的交互过程。..
-cstream.Send(...)
+// 流的交互过程
+cstream.Send()
 cstream.Recv()
 ```
 
@@ -212,7 +212,7 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo,
 
 	begin := time.Now() // 进入流式处理之前，打点记录时间戳
 	
-	// wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等接口
+	// wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等方法
 	ws := &wrappedStream(ss)
 	
 	// 注意这里必须用户自己调用 handler 执行下一个拦截器，除非有特定目的需要直接返回。
@@ -233,7 +233,7 @@ func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo,
 
 例如我只想拦截发送数据的过程，那么只需要重写`SendMsg`方法，至于`server.Stream`其他的方法都不需要实现。这里是为了演示，所以实现了`server.Stream`的所有方法。
 ```golang
-// wrappedStream 封装原始流，需要拦截哪些接口，就重写哪些接口
+// wrappedStream 封装原始流，需要拦截哪些方法，就重写哪些方法
 type wrappedStream struct {
 	server.Stream // 必须内嵌 server.Stream
 }
