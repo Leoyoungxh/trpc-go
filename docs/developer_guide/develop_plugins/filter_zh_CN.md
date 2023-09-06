@@ -100,7 +100,6 @@ type StreamFilter func(context.Context, *client.ClientStreamDesc, client.Streame
 
 ```golang
 func StreamClientFilter(ctx context.Context, desc *client.ClientStreamDesc, streamer client.Streamer) (client.ClientStream, error) {
-
 	begin := time.Now() // 创建流之前，打点记录时间戳
 
 	s, err := streamer(ctx, desc) // 注意这里必须用户自己调用 streamer 执行下一个拦截器，除非有特定目的需要直接返回
@@ -217,8 +216,7 @@ type StreamFilter func(Stream, *StreamServerInfo, StreamHandler) error
 **第一步**：实现`server.StreamFilter`
 
 ```golang
-func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo,
-	handler server.StreamHandler) error {
+func StreamServerFilter(ss server.Stream, si *server.StreamServerInfo, handler server.StreamHandler) error {
 	begin := time.Now() // 进入流式处理之前，打点记录时间戳
 
 	// wrappedStream 封装了 server.Stream，用于后续拦截 SendMsg、RecvMsg 等方法
