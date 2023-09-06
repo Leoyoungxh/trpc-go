@@ -129,7 +129,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	
 	cost := time.Since(begin) // 接收到数据后，计算耗时
 	
-    // 上报耗时到具体监控平台
+	// 上报耗时到具体监控平台
 
 	return err // 注意这里必须返回前面产生的 err
 }
@@ -143,7 +143,7 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	
 	cost := time.Since(begin) // 发送数据后，计算耗时
 	
-    // 上报耗时到具体监控平台
+	// 上报耗时到具体监控平台
 
 	return err // 注意这里必须返回前面产生的 err
 }
@@ -157,7 +157,7 @@ func (w *wrappedStream) CloseSend() error {
 	
 	cost := time.Since(begin) // 关闭本端后，计算耗时
 	
-    // 上报耗时到具体监控平台
+	// 上报耗时到具体监控平台
 
 	return err // 注意这里必须返回前面产生的 err
 }
@@ -247,7 +247,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	
 	cost := time.Since(begin) // 接收到数据后，计算耗时
 	
-    // 上报耗时到具体监控平台
+	// 上报耗时到具体监控平台
 
 	return err // 注意这里必须返回前面产生的 err
 }
@@ -261,7 +261,7 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	
 	cost := time.Since(begin) // 发送数据后，计算耗时
 	
-    // 上报耗时到具体监控平台
+	// 上报耗时到具体监控平台
 
 	return err // 注意这里必须返回前面产生的 err
 }
