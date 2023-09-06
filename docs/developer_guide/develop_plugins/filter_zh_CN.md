@@ -1,11 +1,10 @@
+# tRPC-Go 开发拦截器插件
 
-[TOC]
-
-# 前言
+## 前言
 
 本文介绍如何开发 tRPC-Go 框架的拦截器（也称之为过滤器）。tRPC 框架利用拦截器的机制，将接口请求相关的特定逻辑组件化，插件化，从而同具体的业务逻辑解除耦合，达到复用的目的。例如监控拦截器，分布式追踪拦截器，日志拦截器，鉴权拦截器等。
 
-# 原理
+## 原理
 
 理解拦截器的原理关键点在于理解拦截器的`触发时机` 以及 `顺序性`。
 
@@ -16,7 +15,7 @@
 ![ 'filter.png'](/.resources/developer_guide/develop_plugins/filter/filter.png)
 
 
-# 示例
+## 示例
 
 下面以一个 rpc 耗时统计上报拦截器进行举例说明如何开发拦截器。
 
@@ -81,12 +80,12 @@ client:
   - name
 ```
 
-# 流式拦截器
+## 流式拦截器
 因为流式服务和普通 RPC 调用接口差异较大，例如普通 RPC 的客户端通过 `proxy.SayHello`发起一次 RPC 调用，但是流式客户端通过`proxy.ClientStreamSayHello`创建一个流。流创建后，再调用`SendMsg` `RecvMsg` `CloseSend`来进行流的交互，所以针对流式服务，提供了不一样的拦截器接口。
 
 虽然暴露的接口不同，但是底层的实现方式和普通 RPC 类似，原理参考普通 RPC 拦截器的原理
 
-## 客户端配置
+### 客户端配置
 在客户端配置流式拦截器，需要实现`client.StreamFilter`
 ```golang
 type StreamFilter func(context.Context, *client.ClientStreamDesc, client.Streamer) (client.ClientStream, error)
@@ -198,7 +197,7 @@ cstream.Send(...)
 cstream.Recv()
 ```
 
-## 服务端配置
+### 服务端配置
 
 在服务端配置流式拦截器，需要实现`server.StreamFilter`
 ```golang
@@ -300,12 +299,12 @@ if err := s.Serve(); err != nil {
 }
 ```
 
-# FAQ
+## FAQ
 
-## Q：拦截器入口这里能否拿到二进制数据
+### Q：拦截器入口这里能否拿到二进制数据
 不可以，拦截器入口这里的 req rsp 都是已经经过序列化过的结构体了，可以直接使用数据，没有二进制。
 
-## Q：多个拦截器执行顺序如何
+### Q：多个拦截器执行顺序如何
 多个拦截器的执行顺序按配置文件中的数组顺序执行，如
 ```yaml
 server:
@@ -322,7 +321,7 @@ server:
 接收到请求 -> filter1 前置逻辑 -> filter2 前置逻辑 -> filter3 前置逻辑 -> 用户的业务处理逻辑 -> filter3 后置逻辑 -> filter2 后置逻辑 -> filter1 后置逻辑 -> 回包
 ```
 
-## Q：一个拦截器必须同时设置 server 和 client 吗
+### Q：一个拦截器必须同时设置 server 和 client 吗
 不需要，只需要 server 时，client 传入 nil，同理只需要 client 时，server 传入 nil，如
 
 ```golang
